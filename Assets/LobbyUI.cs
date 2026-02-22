@@ -45,6 +45,15 @@ public class LobbyUI : MonoBehaviour
         string json = "{\"type\":\"JOIN_ROOM\", \"roomId\":\"" + roomName + "\"}";
         FindObjectOfType<NativeWebSocketManager>().SendMessageToServer(json);
     }
+
+    public void OnFindMatchButtonClick()
+    {
+        chatText.text += "\n<color=orange>Searching for an opponent...</color>";
+
+        // Tell the server we want to play
+        string json = "{\"type\":\"FIND_MATCH\"}";
+        FindObjectOfType<NativeWebSocketManager>().SendMessageToServer(json);
+    }
     public void UpdatePlayerCount(int count)
     {
         playercount = count;

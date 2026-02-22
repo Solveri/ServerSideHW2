@@ -17,6 +17,7 @@ public class NativeWebSocketManager : MonoBehaviour
     [Header("Dependencies")]
     public LobbyUI lobbyUI;
     [SerializeField] GameObject loginPanel;
+    [SerializeField] GameObject matchPanel;
     [SerializeField] AuthManager AuthManager;
     public int playerCount;
 
@@ -122,6 +123,29 @@ public class NativeWebSocketManager : MonoBehaviour
                 lobbyUI.AddChatMessage("System", $"{msg.username} joined the lobby.");
                 lobbyUI.UpdatePlayerCount(playerCount);
                 break;
+            case "MATCH_FOUND":
+                // Save info so the next scene knows who we are playing
+                PlayerPrefs.SetString("MatchId", msg.matchId);
+                PlayerPrefs.SetString("OpponentName", msg.opponent);
+                
+                lobbyUI.gameObject.SetActive(false);
+                matchPanel.SetActive(true);
+                break;
+
+            case "GAME_UPDATE":
+                // Find the GameRoomManager in the new scene and update it
+                FindObjectOfType<GameRoomManager>()?.UpdateUI(msg);
+                break;
+
+            case "MATCH_ENDED":
+                Debug.Log("Game Over! Winner: " + msg.winnerName);
+                // Logic for a victory/defeat popup goes here
+                break;
+
+            case "BANNED":
+                Debug.LogError("You have been banned for cheating!");
+                Application.Quit(); // Or show a ban screen
+                break;
         }
     }
 
@@ -136,7 +160,7 @@ public class NativeWebSocketManager : MonoBehaviour
     }
 }
 
-// Data model for JSON communication
+
 [Serializable]
 public class SocketMessage
 {
@@ -145,4 +169,18 @@ public class SocketMessage
     public string sender;
     public string text;
     public int count;
+
+    public string matchId;
+    public string opponent;
+
+    // The "Synchronized" fields from the server
+    public string p1Name;
+    public int p1Score;
+    public string p2Name;
+    public int p2Score;
+    public int score;
+
+    public string winnerName; // Updated from winnerId for easier display
 }
+
+
