@@ -11,7 +11,6 @@ public class NativeWebSocketManager : MonoBehaviour
     private ClientWebSocket _webSocket = null;
     private CancellationTokenSource _cts;
 
-    // Thread-safe queue to move messages from the background thread to Unity's Main Thread
     private readonly ConcurrentQueue<string> _messageQueue = new ConcurrentQueue<string>();
 
     [Header("Dependencies")]
@@ -23,17 +22,16 @@ public class NativeWebSocketManager : MonoBehaviour
 
     private void Update()
     {
-        // Check the queue every frame and update UI components on the Main Thread
         while (_messageQueue.TryDequeue(out string json))
         {
             HandleMessage(json);
         }
     }
+
     private void OnEnable()
     {
-        AuthManager.OnLoginSuccess += ConnectToLobby;   
+        AuthManager.OnLoginSuccess += ConnectToLobby;
     }
-    
 
     public async void ConnectToLobby(string jwtToken)
     {
@@ -42,23 +40,29 @@ public class NativeWebSocketManager : MonoBehaviour
         _webSocket = new ClientWebSocket();
         _cts = new CancellationTokenSource();
 
-        // Pass the JWT in the URL for the server to verify (Requirement: Auth via Token)
-        string url = $"ws://127.0.0.1:3000/?token={jwtToken}";
+        // --- UPDATED URL LOGIC ---
+        // We use 'wss' (Secure) for Render and 'ws' for Localhost
+        string baseUrl = AuthManager.isProduction
+            ? "wss://serversidefinal-1.onrender.com"
+            : "ws://127.0.0.1:3000";
+
+        string url = $"{baseUrl}/?token={jwtToken}";
         Uri uri = new Uri(url);
+        // -------------------------
 
         try
         {
-            Debug.Log("Connecting to WebSocket...");
+            Debug.Log($"Connecting to WebSocket at: {url}");
             await _webSocket.ConnectAsync(uri, _cts.Token);
-            Debug.Log(" WebSocket Connected!");
+            Debug.Log(" WebSocket Connected to Live Server!");
 
-            // Start the background loop to listen for messages
             playerCount++;
             _ = ReceiveLoop();
         }
         catch (Exception e)
         {
             Debug.LogError($"WebSocket Connection Error: {e.Message}");
+            // Troubleshooting tip: If this fails on Render, check if the server is still 'waking up'
         }
     }
 
@@ -79,7 +83,6 @@ public class NativeWebSocketManager : MonoBehaviour
                 else
                 {
                     string message = Encoding.UTF8.GetString(buffer, 0, result.Count);
-                    // Add message to queue to be handled in Update()
                     _messageQueue.Enqueue(message);
                 }
             }
@@ -110,7 +113,6 @@ public class NativeWebSocketManager : MonoBehaviour
 
         if (lobbyUI == null) lobbyUI = FindObjectOfType<LobbyUI>();
 
-        // Route the message to the correct UI function
         switch (msg.type)
         {
             case "LOBBY_UPDATE":
@@ -121,31 +123,29 @@ public class NativeWebSocketManager : MonoBehaviour
                 break;
             case "PLAYER_JOINED":
                 lobbyUI.AddChatMessage("System", $"{msg.username} joined the lobby.");
-                lobbyUI.UpdatePlayerCount(playerCount);
                 break;
             case "MATCH_FOUND":
-                // Save info so the next scene knows who we are playing
                 PlayerPrefs.SetString("MatchId", msg.matchId);
                 PlayerPrefs.SetString("OpponentName", msg.opponent);
-                
+
                 lobbyUI.gameObject.SetActive(false);
                 matchPanel.SetActive(true);
                 break;
 
             case "GAME_UPDATE":
-                // Find the GameRoomManager in the new scene and update it
                 FindObjectOfType<GameRoomManager>()?.UpdateUI(msg);
                 break;
 
             case "MATCH_ENDED":
                 Debug.Log("Game Over! Winner: " + msg.winnerName);
-                // Logic for a victory/defeat popup goes here
                 break;
 
             case "BANNED":
                 Debug.LogError("You have been banned for cheating!");
-                Application.Quit(); // Or show a ban screen
+                // Optionally show a UI popup before quitting
+                Application.Quit();
                 break;
+           
         }
     }
 
@@ -154,7 +154,10 @@ public class NativeWebSocketManager : MonoBehaviour
         if (_webSocket != null)
         {
             _cts.Cancel();
-            await _webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "App Destroyed", CancellationToken.None);
+            if (_webSocket.State == WebSocketState.Open)
+            {
+                await _webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "App Destroyed", CancellationToken.None);
+            }
             _webSocket.Dispose();
         }
     }

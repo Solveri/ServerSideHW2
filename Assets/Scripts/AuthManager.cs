@@ -1,25 +1,43 @@
-using UnityEngine;
-using TMPro;
 using System.Threading.Tasks;
+using TMPro;
+using UnityEngine;
+using UnityEngine.Networking;
+using System.Collections;
 
 public class AuthManager : MonoBehaviour
 {
     private ApiClient _apiClient;
 
     [Header("Settings")]
-    public string serverUrl = "http://localhost:3000"; // Ensure this matches your Node server
+    // 1. SET THIS TO TRUE FOR THE LIVE SERVER
+    public bool isProduction = true;
+
+    // 2. Replace this with your actual Render URL (keep the https://)
+    private string productionUrl = "https://serversidefinal-1.onrender.com";
+    private string localUrl = "http://localhost:3000";
 
     [Header("UI References")]
     public TMP_InputField usernameInput;
     public TMP_InputField passwordInput;
     public TextMeshProUGUI feedbackText;
 
-    public event System.Action<string> OnLoginSuccess; // Event to notify successful login with JWT token
+    public event System.Action<string> OnLoginSuccess;
 
     private void Awake()
     {
-        // Initialize your ApiClient with the base URL
-        _apiClient = new ApiClient(serverUrl);
+        // Automatically picks the right URL based on the checkbox
+        string activeUrl = isProduction ? productionUrl : localUrl;
+        _apiClient = new ApiClient(activeUrl);
+
+        Debug.Log($"AuthManager initialized. Target: {activeUrl}");
+    }
+
+    private void Start()
+    {
+        if (isProduction)
+        {
+            StartCoroutine(WakeUpServer());
+        }
     }
 
     // --- ASSIGNMENT 1: REGISTER ---
@@ -33,13 +51,12 @@ public class AuthManager : MonoBehaviour
             password = passwordInput.text
         };
 
-        // Note: Using /api/auth/register based on our previous server code
         var response = await _apiClient.PostAsync<string>("/api/auth/register", requestData);
 
         if (response.Success)
         {
-            feedbackText.text = "<color=green>User Registered!</color> Check MongoDB Compass.";
-            
+            // Updated text to reflect cloud storage
+            feedbackText.text = "<color=green>User Registered!</color> Check MongoDB Atlas.";
             Debug.Log("Registration Success!");
         }
         else
@@ -63,19 +80,55 @@ public class AuthManager : MonoBehaviour
 
         if (response.Success)
         {
-            // REQUIREMENT: Connects to WebSocket using token
             string token = response.Data.token;
-            _apiClient.SetAuthToken(token); // Save it in the client for future REST calls
+            _apiClient.SetAuthToken(token);
 
             feedbackText.text = "<color=green>Logged In!</color>";
-            OnLoginSuccess?.Invoke(token); // Notify listeners about successful login with the token
-            Debug.Log("JWT Token Received: " + token);
 
-            // This is where you would trigger your NativeWebSocketManager.Connect(token)
+            // 3. IMPORTANT: Pass the token to the WebSocket manager
+            // Ensure your WebSocket manager uses "wss://" for production
+            OnLoginSuccess?.Invoke(token);
+
+            Debug.Log("JWT Token Received: " + token);
         }
         else
         {
+            // If it fails, it might be because the server is still 'waking up'
             feedbackText.text = "<color=red>Login Failed: " + response.ErrorMessage + "</color>";
+            Debug.LogWarning("Check Render logs if this persists.");
+        }
+    }
+    private IEnumerator WakeUpServer()
+    {
+        // Clean the URL to ensure no double slashes
+        string cleanUrl = productionUrl.TrimEnd('/');
+        Debug.Log($"[Wakeup] Pinging: {cleanUrl}");
+
+        using (UnityWebRequest webRequest = UnityWebRequest.Get(cleanUrl))
+        {
+            webRequest.timeout = 30; // 30s is plenty if the browser already sees it
+
+            // This tells the server we are a standard client
+            webRequest.SetRequestHeader("Content-Type", "application/json");
+            webRequest.SetRequestHeader("User-Agent", "UnityPlayer");
+
+            yield return webRequest.SendWebRequest();
+
+            if (webRequest.result == UnityWebRequest.Result.Success)
+            {
+                Debug.Log(" [Wakeup] Unity successfully reached the server!");
+                feedbackText.text = "<color=green>Connected to Cloud</color>";
+            }
+            else
+            {
+                // Even if it "fails" with a 404, the server IS awake if it responds at all.
+                Debug.LogWarning($" [Wakeup] Response: {webRequest.responseCode} - {webRequest.error}");
+
+                if (webRequest.responseCode == 404 || webRequest.responseCode == 200)
+                {
+                    Debug.Log(" Server responded! We are good to go.");
+                }
+            }
         }
     }
 }

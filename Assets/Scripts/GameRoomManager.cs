@@ -36,7 +36,11 @@ public class GameRoomManager : MonoBehaviour
             scoreText.text = $"Me ({msg.p2Name}): {msg.p2Score} | {msg.p1Name}: {msg.p1Score}";
         }
     }
-
+    public void UpdateWinnder(SocketMessage msg)
+    {
+        string WinnerText = msg.winnerName;
+        scoreText.text = $"Winner: {WinnerText}";
+    }
     public void OnAddScoreClick()
     {
         string matchId = PlayerPrefs.GetString("MatchId");
