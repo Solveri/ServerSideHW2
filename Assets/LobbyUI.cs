@@ -2,11 +2,13 @@ using UnityEngine;
 using TMPro;
 using UnityEngine.UI; // Needed for ScrollRect
 using System.Collections;
+using System.Collections.Generic;
 
 public class LobbyUI : MonoBehaviour
 {
     public TextMeshProUGUI chatText;      // The actual text component
     public TextMeshProUGUI Count;      // The actual text component
+    public TextMeshProUGUI leaderboardDisplay;   
     public ScrollRect chatScrollRect;    // The Scroll View's ScrollRect component
     public TMP_InputField chatInput;     // Where the player types
     int playercount;
@@ -35,6 +37,22 @@ public class LobbyUI : MonoBehaviour
         FindObjectOfType<NativeWebSocketManager>().SendMessageToServer(json);
 
         chatInput.text = ""; // JUST clear the input, don't update the text area here!
+    }
+    public void UpdateLeaderboard(List<LeaderboardEntry> players)
+    {
+        if (players == null || players.Count == 0) return;
+
+        string leaderboardText = "<color=#FFD700> LEADERBOARD </color>\n\n";
+
+        for (int i = 0; i < players.Count; i++)
+        {
+            // Highlight the top 3 with different colors
+            string color = i == 0 ? "#FFD700" : (i == 1 ? "#C0C0C0" : (i == 2 ? "#CD7F32" : "#FFFFFF"));
+
+            leaderboardText += $"<color={color}>{i + 1}. {players[i].username}</color> — {players[i].wins} Wins\n";
+        }
+
+        leaderboardDisplay.text = leaderboardText;
     }
     public void OnRoomClick(string roomName)
     {

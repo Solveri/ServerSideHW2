@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Net.WebSockets;
 using System.Text;
 using System.Threading;
@@ -138,6 +139,8 @@ public class NativeWebSocketManager : MonoBehaviour
 
             case "MATCH_ENDED":
                 Debug.Log("Game Over! Winner: " + msg.winnerName);
+                matchPanel.SetActive(false);
+                lobbyUI.gameObject.SetActive(true);
                 break;
 
             case "BANNED":
@@ -145,7 +148,10 @@ public class NativeWebSocketManager : MonoBehaviour
                 // Optionally show a UI popup before quitting
                 Application.Quit();
                 break;
-           
+            case "LEADERBOARD_UPDATE":
+                lobbyUI.UpdateLeaderboard(msg.players);
+                break;
+
         }
     }
 
@@ -182,8 +188,14 @@ public class SocketMessage
     public string p2Name;
     public int p2Score;
     public int score;
-
+    public List<LeaderboardEntry> players;
     public string winnerName; // Updated from winnerId for easier display
 }
 
+[Serializable]
+public class LeaderboardEntry
+{
+    public string username;
+    public int wins;
+}
 
